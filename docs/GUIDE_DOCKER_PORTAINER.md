@@ -1,5 +1,7 @@
 # Guide de déploiement Docker & Portainer (spécial débutants)
 
+> [🇬🇧 **English version (DOCKER_PORTAINER_GUIDE.md)**](DOCKER_PORTAINER_GUIDE.md) | 🇫🇷 **Français**
+
 Ce guide explique **étape par étape**, sans jargon inutile, comment déployer le serveur **MCPIdhall** sur votre propre serveur :
 1. **Avec Docker simple** (3 commandes)
 2. **Avec Portainer** (100 % graphique, sans terminal)

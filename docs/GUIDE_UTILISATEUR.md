@@ -1,5 +1,7 @@
 # Guide Utilisateur Complet — MCPIdhall
 
+> [🇬🇧 **English version (USER_GUIDE.md)**](USER_GUIDE.md) | 🇫🇷 **Français**
+
 > **Du débutant au professionnel** : tout ce qu'il faut pour installer, configurer, utiliser au quotidien et déployer en entreprise le serveur MCP **MCPIdhall** connecté à l'API REST d'**IDhall** (*Humanperf Software*).
 
 ---
