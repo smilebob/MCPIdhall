@@ -12,7 +12,7 @@ This step-by-step guide shows how to deploy **MCPIdhall** on your own server wit
 ## Before You Start (30-Second Read)
 
 * **No secrets or JWT tokens on the server:** `MCPIdhall` is multi-user by design. Every user passes their own IDhall JWT token from their AI client.
-* **Multi-arch ready:** The official image `ghcr.io/smilebob/mcp-idhall:latest` supports both `linux/amd64` (standard PCs/servers/VPS) and `linux/arm64` (Raspberry Pi, Apple Silicon, ARM servers).
+* **Multi-arch ready:** The official image `ghcr.io/smilebob/mcpidhall:latest` supports both `linux/amd64` (standard PCs/servers/VPS) and `linux/arm64` (Raspberry Pi, Apple Silicon, ARM servers).
 
 ---
 
@@ -28,7 +28,7 @@ docker run -d \
   -e IDHALL_ALLOWED_HOSTS="*" \
   -e IDHALL_LANGUAGE="en" \
   -e IDHALL_TIMEZONE="UTC" \
-  ghcr.io/smilebob/mcp-idhall:latest
+  ghcr.io/smilebob/mcpidhall:latest
 ```
 
 ### Option 2: Build Locally from the Repository
@@ -67,7 +67,7 @@ curl http://127.0.0.1:8000/health
 ```yaml
 services:
   mcp-idhall:
-    image: ghcr.io/smilebob/mcp-idhall:latest
+    image: ghcr.io/smilebob/mcpidhall:latest
     container_name: mcp-idhall
     restart: unless-stopped
     ports:
@@ -92,7 +92,7 @@ services:
 ```yaml
 services:
   mcp-idhall:
-    image: ghcr.io/smilebob/mcp-idhall:latest
+    image: ghcr.io/smilebob/mcpidhall:latest
     container_name: mcp-idhall
     restart: unless-stopped
     environment:

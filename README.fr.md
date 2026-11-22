@@ -59,7 +59,7 @@ docker run -d \
   -e IDHALL_ALLOWED_HOSTS="*" \
   -e IDHALL_LANGUAGE="fr" \
   -e IDHALL_TIMEZONE="Europe/Paris" \
-  ghcr.io/smilebob/mcp-idhall:latest
+  ghcr.io/smilebob/mcpidhall:latest
 ```
 
 Chaque client MCP distant se connecte en HTTPS avec son propre jeton :

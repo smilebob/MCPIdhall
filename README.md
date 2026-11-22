@@ -59,7 +59,7 @@ docker run -d \
   -e IDHALL_ALLOWED_HOSTS="*" \
   -e IDHALL_LANGUAGE="en" \
   -e IDHALL_TIMEZONE="UTC" \
-  ghcr.io/smilebob/mcp-idhall:latest
+  ghcr.io/smilebob/mcpidhall:latest
 ```
 
 Each remote MCP client connects over HTTPS with its own user JWT:

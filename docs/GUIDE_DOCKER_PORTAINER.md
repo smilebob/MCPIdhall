@@ -32,7 +32,7 @@ docker run -d \
   -e IDHALL_ALLOWED_HOSTS="*" \
   -e IDHALL_LANGUAGE="fr" \
   -e IDHALL_TIMEZONE="Europe/Paris" \
-  ghcr.io/smilebob/mcp-idhall:latest
+  ghcr.io/smilebob/mcpidhall:latest
 ```
 
 ### Cas 2 : Vous déployez depuis le dossier du projet (build local)
@@ -84,7 +84,7 @@ Portainer vous permet de tout faire à la souris depuis votre navigateur.
 ```yaml
 services:
   mcp-idhall:
-    image: ghcr.io/smilebob/mcp-idhall:latest
+    image: ghcr.io/smilebob/mcpidhall:latest
     container_name: mcp-idhall
     restart: unless-stopped
     ports:
@@ -109,7 +109,7 @@ services:
 ```yaml
 services:
   mcp-idhall:
-    image: ghcr.io/smilebob/mcp-idhall:latest
+    image: ghcr.io/smilebob/mcpidhall:latest
     container_name: mcp-idhall
     restart: unless-stopped
     environment:

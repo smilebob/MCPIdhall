@@ -1,7 +1,7 @@
 services:
   mcp-idhall:
     # Pour utiliser l'image préconstruite GHCR, remplacez `build: .` par :
-    # image: ghcr.io/smilebob/mcp-idhall:latest
+    # image: ghcr.io/smilebob/mcpidhall:latest
     build:
       context: .
       dockerfile: Dockerfile
