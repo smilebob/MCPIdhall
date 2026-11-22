@@ -1,0 +1,26 @@
+# Secrets & environnement local (NE JAMAIS embarquer dans l'image)
+.env
+.env.*
+!.env.docker.example
+
+# Environnements virtuels & caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Git, CI, tests, scripts et docs non nécessaires au runtime
+.git/
+.github/
+tests/
+scripts/
+docs/openapi.json
+docs/IDHALL_API_SYNTHESE.md
+docs/GUIDE_UTILISATEUR.md
+docker-compose*.yml
+Dockerfile
+*.md
+!README.md

@@ -1,0 +1,45 @@
+services:
+  mcp-idhall:
+    # Pour utiliser l'image préconstruite GHCR, remplacez `build: .` par :
+    # image: ghcr.io/smilebob/mcp-idhall:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcp-idhall:latest
+    container_name: mcp-idhall
+    restart: unless-stopped
+
+    # Portable : par défaut exposé sur 127.0.0.1:8000 (modifiable via .env.docker / variables d'env)
+    # Si vous utilisez un réseau Docker partagé avec Nginx Proxy Manager / Traefik / Caddy,
+    # vous pouvez commenter `ports:` et décommenter le bloc `networks:` ci-dessous.
+    ports:
+      - "${MCP_BIND_IP:-127.0.0.1}:${MCP_PORT:-8000}:8000"
+
+    environment:
+      MCP_TRANSPORT: "${MCP_TRANSPORT:-streamable-http}"
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "8000"
+      # Par défaut '*' autorise toute instance IDhall HTTPS (SaaS et on-premise).
+      # Pour verrouiller sur une seule instance en production, indiquez ex: mon-entreprise.idhall.com
+      IDHALL_ALLOWED_HOSTS: "${IDHALL_ALLOWED_HOSTS:-*}"
+      # Optionnel : URL IDhall par défaut si un JWT n'a pas de claim `iss`
+      IDHALL_BASE_URL: "${IDHALL_BASE_URL:-}"
+      IDHALL_LANGUAGE: "${IDHALL_LANGUAGE:-fr}"
+      IDHALL_TIMEZONE: "${IDHALL_TIMEZONE:-Europe/Paris}"
+
+    # Durcissement conteneur
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # Exemple pour connecter directement MCPIdhall au réseau Docker de Nginx Proxy Manager (NPM) :
+    # networks:
+    #   - npm_network
+    #
+    # networks:
+    #   npm_network:
+    #     external: true
