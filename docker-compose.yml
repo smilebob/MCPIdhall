@@ -19,9 +19,12 @@ services:
       MCP_TRANSPORT: "${MCP_TRANSPORT:-streamable-http}"
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "8000"
-      # Par défaut '*' autorise toute instance IDhall HTTPS (SaaS et on-premise).
-      # Pour verrouiller sur une seule instance en production, indiquez ex: mon-entreprise.idhall.com
-      IDHALL_ALLOWED_HOSTS: "${IDHALL_ALLOWED_HOSTS:-*}"
+      # Par défaut '*.idhall.com' (instances SaaS IDhall). Pour du on-premise, indiquez votre domaine.
+      IDHALL_ALLOWED_HOSTS: "${IDHALL_ALLOWED_HOSTS:-*.idhall.com}"
+      # Protection anti-SSRF : passer à 'true' uniquement pour un IDhall on-premise sur réseau privé.
+      IDHALL_ALLOW_PRIVATE_NETWORKS: "${IDHALL_ALLOW_PRIVATE_NETWORKS:-false}"
+      # Optionnel : 'true' pour forcer un serveur 100 % lecture seule (bloque POST/PUT/PATCH/DELETE).
+      IDHALL_READ_ONLY: "${IDHALL_READ_ONLY:-false}"
       # Optionnel : URL IDhall par défaut si un JWT n'a pas de claim `iss`
       IDHALL_BASE_URL: "${IDHALL_BASE_URL:-}"
       IDHALL_LANGUAGE: "${IDHALL_LANGUAGE:-fr}"

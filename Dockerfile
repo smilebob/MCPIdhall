@@ -47,7 +47,9 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     MCP_TRANSPORT="streamable-http" \
     MCP_HOST="0.0.0.0" \
     MCP_PORT="8000" \
-    IDHALL_ALLOWED_HOSTS="*" \
+    IDHALL_ALLOWED_HOSTS="*.idhall.com" \
+    IDHALL_ALLOW_PRIVATE_NETWORKS="false" \
+    IDHALL_READ_ONLY="false" \
     IDHALL_LANGUAGE="fr" \
     IDHALL_REFERENCE_JSON="/app/docs/idhall_api_reference.json"
 

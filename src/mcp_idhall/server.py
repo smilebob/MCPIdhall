@@ -11,17 +11,54 @@ from __future__ import annotations
 
 import argparse
 import os
-from typing import Any, Literal
+import re
+from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from mcp_idhall import __version__
-from mcp_idhall.auth import IDhallAuthError, resolve_credentials
+from mcp_idhall.auth import resolve_credentials, set_active_transport
 from mcp_idhall.catalog import get_endpoint_spec, search_endpoints
 from mcp_idhall.client import IDhallClient
+
+_ENDPOINT_ID_RE = re.compile(r"^[A-Z]+__[A-Za-z0-9_()\-]+$")
+
+# Annotations MCP 2025 pour permettre aux clients (Antigravity, Claude, Cursor) de
+# distinguer nativement lecture seule, écriture idempotente et actions destructives.
+READ_ONLY_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=True,
+)
+LOCAL_READ_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=True,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=False,
+)
+WRITE_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=True,
+)
+WRITE_IDEMPOTENT_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=True,
+    open_world_hint=True,
+)
+DESTRUCTIVE_ANNOTATIONS = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=True,
+    idempotent_hint=False,
+    open_world_hint=True,
+)
 
 mcp = FastMCP(
     name="MCPIdhall",
@@ -86,13 +123,13 @@ def _get_client() -> IDhallClient:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_about() -> dict[str, Any]:
     """Retourne les informations sur la version d'IDhall et de son API REST."""
-    return await _get_client().request("GET", "/api/v1/about")
+    return cast(dict[str, Any], await _get_client().request("GET", "/api/v1/about"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_whoami(props: list[str] | None = None) -> dict[str, Any]:
     """Identifie l'utilisateur associé au jeton JWT courant et récupère sa fiche IDhall."""
     creds = resolve_credentials()
@@ -117,7 +154,7 @@ async def idhall_whoami(props: list[str] | None = None) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=LOCAL_READ_ANNOTATIONS)
 def idhall_search_endpoints(
     query: str = "",
     method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"] | None = None,
@@ -131,17 +168,26 @@ def idhall_search_endpoints(
     return search_endpoints(query=query, method=method, limit=limit)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_endpoint_spec(endpoint_id: str) -> dict[str, Any]:
     """Retourne le schéma complet (paramètres, payload, classes, réponse) d'un endpoint IDhall.
 
     Lit d'abord le catalogue local ; interroge `/api/v1/reference/endpoints/{endpoint_id}` si absent.
     Exemple d'`endpoint_id` : `GET__ideas`, `POST__ideas`, `PATCH__ideas__(id)`.
     """
-    local = get_endpoint_spec(endpoint_id)
+    cleaned = endpoint_id.strip()
+    if not _ENDPOINT_ID_RE.match(cleaned):
+        raise ValueError(
+            f"Identifiant d'endpoint invalide ({endpoint_id!r}). "
+            "Format attendu : ex. 'GET__ideas', 'POST__ideas', 'PATCH__ideas__(id)'."
+        )
+    local = get_endpoint_spec(cleaned)
     if local is not None:
         return local
-    return await _get_client().request("GET", f"/api/v1/reference/endpoints/{endpoint_id}")
+    return cast(
+        dict[str, Any],
+        await _get_client().request("GET", f"/api/v1/reference/endpoints/{cleaned}"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +195,7 @@ async def idhall_get_endpoint_spec(endpoint_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_list_ideas(
     props: list[str] | None = None,
     filter: dict[str, Any] | None = None,
@@ -166,51 +212,66 @@ async def idhall_list_ideas(
         page_size: Nombre d'éléments par page (1 à 100, défaut 20).
         count: Si True, inclut le nombre total de résultats.
     """
-    return await _get_client().request(
-        "GET",
-        "/api/v1/ideas",
-        query_params={
-            "props": props,
-            "filter": filter,
-            "offset": offset,
-            "page_size": max(1, min(page_size, 100)),
-            "count": count,
-        },
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            "/api/v1/ideas",
+            query_params={
+                "props": props,
+                "filter": filter,
+                "offset": offset,
+                "page_size": max(1, min(page_size, 100)),
+                "count": count,
+            },
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_count_ideas(filter: dict[str, Any] | None = None) -> dict[str, Any]:
     """Compte le nombre d'initiatives correspondant au filtre donné (`IdeaFilter`)."""
-    return await _get_client().request(
-        "GET", "/api/v1/ideas/count", query_params={"filter": filter} if filter else None
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET", "/api/v1/ideas/count", query_params={"filter": filter} if filter else None
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea(idea_id: int, props: list[str] | None = None) -> dict[str, Any]:
     """Récupère les détails d'une initiative par son ID. Passez `props` pour obtenir plus que {id, title}."""
-    return await _get_client().request(
-        "GET", f"/api/v1/ideas/{idea_id}", query_params={"props": props} if props else None
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET", f"/api/v1/ideas/{idea_id}", query_params={"props": props} if props else None
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea_input_availability(
     idea_id: int | None = None,
     plan_id: int | None = None,
 ) -> dict[str, Any]:
     """Retourne les propriétés disponibles/requises pour créer (idea_id=None) ou modifier une initiative."""
     if idea_id is None:
-        return await _get_client().request(
-            "GET",
-            "/api/v1/ideas/post-input-availability",
-            query_params={"plan": plan_id} if plan_id is not None else None,
+        return cast(
+            dict[str, Any],
+            await _get_client().request(
+                "GET",
+                "/api/v1/ideas/post-input-availability",
+                query_params={"plan": plan_id} if plan_id is not None else None,
+            ),
         )
-    return await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/patch-input-availability")
+    return cast(
+        dict[str, Any],
+        await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/patch-input-availability"),
+    )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_create_idea(
     title: str,
     plan: int,
@@ -218,15 +279,7 @@ async def idhall_create_idea(
     context: str | None = None,
     extra_fields: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Crée et publie immédiatement une nouvelle initiative dans IDhall (`POST /api/v1/ideas`).
-
-    Args:
-        title: Intitulé de l'initiative (max 150 caractères).
-        plan: Identifiant numérique de l'axe (`plan`) cible.
-        description: Description de l'initiative.
-        context: Contexte de l'initiative.
-        extra_fields: Champs additionnels optionnels (ex: targeted_sites, targeted_organizations, categories, author, etc.).
-    """
+    """Crée et publie immédiatement une nouvelle initiative dans IDhall (`POST /api/v1/ideas`)."""
     payload: dict[str, Any] = {"title": title, "plan": plan}
     if description is not None:
         payload["description"] = description
@@ -234,10 +287,10 @@ async def idhall_create_idea(
         payload["context"] = context
     if extra_fields:
         payload.update(extra_fields)
-    return await _get_client().request("POST", "/api/v1/ideas", json_body=payload)
+    return cast(dict[str, Any], await _get_client().request("POST", "/api/v1/ideas", json_body=payload))
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_create_idea_draft(
     title: str,
     plan: int | None = None,
@@ -252,31 +305,38 @@ async def idhall_create_idea_draft(
         payload["description"] = description
     if extra_fields:
         payload.update(extra_fields)
-    return await _get_client().request("POST", "/api/v1/ideas/draft", json_body=payload)
+    return cast(
+        dict[str, Any], await _get_client().request("POST", "/api/v1/ideas/draft", json_body=payload)
+    )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_publish_idea_draft(
     idea_id: int,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Publie une initiative brouillon existante (`POST /api/v1/ideas/{id}/publish`)."""
-    return await _get_client().request("POST", f"/api/v1/ideas/{idea_id}/publish", json_body=payload)
+    return cast(
+        dict[str, Any],
+        await _get_client().request("POST", f"/api/v1/ideas/{idea_id}/publish", json_body=payload),
+    )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_IDEMPOTENT_ANNOTATIONS)
 async def idhall_update_idea(idea_id: int, fields: dict[str, Any]) -> dict[str, Any]:
     """Modifie partiellement une initiative existante (`PATCH /api/v1/ideas/{id}`).
 
     Ne passez dans `fields` que les propriétés à modifier.
     """
-    return await _get_client().request("PATCH", f"/api/v1/ideas/{idea_id}", json_body=fields)
+    return cast(
+        dict[str, Any], await _get_client().request("PATCH", f"/api/v1/ideas/{idea_id}", json_body=fields)
+    )
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_ANNOTATIONS)
 async def idhall_delete_idea(idea_id: int) -> dict[str, Any]:
     """Supprime définitivement une initiative (`DELETE /api/v1/ideas/{id}`)."""
-    return await _get_client().request("DELETE", f"/api/v1/ideas/{idea_id}")
+    return cast(dict[str, Any], await _get_client().request("DELETE", f"/api/v1/ideas/{idea_id}"))
 
 
 # ---------------------------------------------------------------------------
@@ -284,17 +344,20 @@ async def idhall_delete_idea(idea_id: int) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea_stage(idea_id: int, props: list[str] | None = None) -> dict[str, Any]:
     """Retourne l'étape de traitement en cours d'une initiative (`GET /api/v1/ideas/{id}/stages/current`)."""
-    return await _get_client().request(
-        "GET",
-        f"/api/v1/ideas/{idea_id}/stages/current",
-        query_params={"props": props} if props else None,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            f"/api/v1/ideas/{idea_id}/stages/current",
+            query_params={"props": props} if props else None,
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_ANNOTATIONS)
 async def idhall_transition_idea_stage(
     idea_id: int,
     action: STAGE_TRANSITIONS,
@@ -309,9 +372,12 @@ async def idhall_transition_idea_stage(
     - `cancel` (annule la dernière étape via `DELETE /api/v1/ideas/{id}/stages/current`)
     """
     if action == "cancel":
-        return await _get_client().request("DELETE", f"/api/v1/ideas/{idea_id}/stages/current")
-    return await _get_client().request(
-        "POST", f"/api/v1/ideas/{idea_id}/stages/{action}", json_body=payload
+        return cast(
+            dict[str, Any], await _get_client().request("DELETE", f"/api/v1/ideas/{idea_id}/stages/current")
+        )
+    return cast(
+        dict[str, Any],
+        await _get_client().request("POST", f"/api/v1/ideas/{idea_id}/stages/{action}", json_body=payload),
     )
 
 
@@ -320,20 +386,23 @@ async def idhall_transition_idea_stage(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea_implementation(
     idea_id: int,
     props: list[str] | None = None,
 ) -> dict[str, Any]:
     """Récupère les informations de mise en œuvre d'une initiative."""
-    return await _get_client().request(
-        "GET",
-        f"/api/v1/ideas/{idea_id}/implementation",
-        query_params={"props": props} if props else None,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            f"/api/v1/ideas/{idea_id}/implementation",
+            query_params={"props": props} if props else None,
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_update_idea_implementation_progress(
     idea_id: int,
     percent: int | None = None,
@@ -348,25 +417,31 @@ async def idhall_update_idea_implementation_progress(
         body["confidence"] = confidence
     if comment is not None:
         body["comment"] = comment
-    return await _get_client().request(
-        "POST", f"/api/v1/ideas/{idea_id}/implementation/progress", json_body=body
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "POST", f"/api/v1/ideas/{idea_id}/implementation/progress", json_body=body
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_list_action_plan_tasks(
     idea_id: int,
     props: list[str] | None = None,
 ) -> dict[str, Any]:
     """Liste les tâches du plan d'action d'une initiative."""
-    return await _get_client().request(
-        "GET",
-        f"/api/v1/ideas/{idea_id}/action-plan/tasks",
-        query_params={"props": props} if props else None,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            f"/api/v1/ideas/{idea_id}/action-plan/tasks",
+            query_params={"props": props} if props else None,
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_create_action_plan_task(
     idea_id: int,
     title: str,
@@ -388,24 +463,28 @@ async def idhall_create_action_plan_task(
         body["section"] = section
     if time_range is not None:
         body["time_range"] = time_range
-    return await _get_client().request(
-        "POST", f"/api/v1/ideas/{idea_id}/action-plan/tasks", json_body=body
+    return cast(
+        dict[str, Any],
+        await _get_client().request("POST", f"/api/v1/ideas/{idea_id}/action-plan/tasks", json_body=body),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_IDEMPOTENT_ANNOTATIONS)
 async def idhall_update_action_plan_task(
     idea_id: int,
     task_id: int,
     fields: dict[str, Any],
 ) -> dict[str, Any]:
     """Modifie une tâche d'un plan d'action (`PATCH /api/v1/ideas/{id}/action-plan/tasks/{task_id}`)."""
-    return await _get_client().request(
-        "PATCH", f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}", json_body=fields
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "PATCH", f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}", json_body=fields
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_update_task_progress(
     idea_id: int,
     task_id: int,
@@ -421,18 +500,22 @@ async def idhall_update_task_progress(
         body["confidence"] = confidence
     if comment is not None:
         body["comment"] = comment
-    return await _get_client().request(
-        "POST",
-        f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}/progress",
-        json_body=body,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "POST",
+            f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}/progress",
+            json_body=body,
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_ANNOTATIONS)
 async def idhall_delete_action_plan_task(idea_id: int, task_id: int) -> dict[str, Any]:
     """Supprime une tâche d'un plan d'action (`DELETE /api/v1/ideas/{id}/action-plan/tasks/{task_id}`)."""
-    return await _get_client().request(
-        "DELETE", f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}"
+    return cast(
+        dict[str, Any],
+        await _get_client().request("DELETE", f"/api/v1/ideas/{idea_id}/action-plan/tasks/{task_id}"),
     )
 
 
@@ -441,20 +524,23 @@ async def idhall_delete_action_plan_task(idea_id: int, task_id: int) -> dict[str
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_list_idea_contributions(
     idea_id: int,
     props: list[str] | None = None,
 ) -> dict[str, Any]:
     """Liste les contributions d'une initiative."""
-    return await _get_client().request(
-        "GET",
-        f"/api/v1/ideas/{idea_id}/contributions",
-        query_params={"props": props} if props else None,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            f"/api/v1/ideas/{idea_id}/contributions",
+            query_params={"props": props} if props else None,
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_add_idea_contribution(
     idea_id: int,
     text: str,
@@ -464,30 +550,34 @@ async def idhall_add_idea_contribution(
     body: dict[str, Any] = {"text": text}
     if sentiment is not None:
         body["sentiment"] = sentiment
-    return await _get_client().request(
-        "POST", f"/api/v1/ideas/{idea_id}/contributions", json_body=body
+    return cast(
+        dict[str, Any],
+        await _get_client().request("POST", f"/api/v1/ideas/{idea_id}/contributions", json_body=body),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea_memo(idea_id: int) -> dict[str, Any]:
     """Récupère le mémo d'une initiative."""
-    return await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/memo")
+    return cast(dict[str, Any], await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/memo"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_IDEMPOTENT_ANNOTATIONS)
 async def idhall_set_idea_memo(idea_id: int, memo: str) -> dict[str, Any]:
     """Définit ou remplace le mémo d'une initiative (`PUT /api/v1/ideas/{id}/memo`)."""
-    return await _get_client().request("PUT", f"/api/v1/ideas/{idea_id}/memo", json_body={"memo": memo})
+    return cast(
+        dict[str, Any],
+        await _get_client().request("PUT", f"/api/v1/ideas/{idea_id}/memo", json_body={"memo": memo}),
+    )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_idea_tags(idea_id: int) -> dict[str, Any]:
     """Récupère les tags associés à une initiative."""
-    return await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/tags")
+    return cast(dict[str, Any], await _get_client().request("GET", f"/api/v1/ideas/{idea_id}/tags"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
 async def idhall_manage_idea_tags(
     idea_id: int,
     operation: Literal["add", "replace", "remove"],
@@ -495,21 +585,27 @@ async def idhall_manage_idea_tags(
 ) -> dict[str, Any]:
     """Ajoute (`add`), remplace (`replace`) ou supprime (`remove`) des tags sur une initiative."""
     method_map = {"add": "POST", "replace": "PUT", "remove": "DELETE"}
-    return await _get_client().request(
-        method_map[operation], f"/api/v1/ideas/{idea_id}/tags", json_body={"tags": tags}
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            method_map[operation], f"/api/v1/ideas/{idea_id}/tags", json_body={"tags": tags}
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_opportunity_analysis(
     idea_id: int,
     props: list[str] | None = None,
 ) -> dict[str, Any]:
     """Récupère l'analyse d'opportunité d'une initiative."""
-    return await _get_client().request(
-        "GET",
-        f"/api/v1/ideas/{idea_id}/opportunity-analysis",
-        query_params={"props": props} if props else None,
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            f"/api/v1/ideas/{idea_id}/opportunity-analysis",
+            query_params={"props": props} if props else None,
+        ),
     )
 
 
@@ -518,7 +614,7 @@ async def idhall_get_opportunity_analysis(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_list_users(
     props: list[str] | None = None,
     filter: dict[str, Any] | None = None,
@@ -527,28 +623,34 @@ async def idhall_list_users(
     count: bool = False,
 ) -> dict[str, Any]:
     """Liste les utilisateurs IDhall avec pagination, projection (`props`) et filtres (`UserFilter`)."""
-    return await _get_client().request(
-        "GET",
-        "/api/v1/users",
-        query_params={
-            "props": props,
-            "filter": filter,
-            "offset": offset,
-            "page_size": max(1, min(page_size, 100)),
-            "count": count,
-        },
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET",
+            "/api/v1/users",
+            query_params={
+                "props": props,
+                "filter": filter,
+                "offset": offset,
+                "page_size": max(1, min(page_size, 100)),
+                "count": count,
+            },
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_get_user(user_id: int, props: list[str] | None = None) -> dict[str, Any]:
     """Récupère la fiche d'un utilisateur IDhall par son ID."""
-    return await _get_client().request(
-        "GET", f"/api/v1/users/{user_id}", query_params={"props": props} if props else None
+    return cast(
+        dict[str, Any],
+        await _get_client().request(
+            "GET", f"/api/v1/users/{user_id}", query_params={"props": props} if props else None
+        ),
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 async def idhall_list_reference_items(
     resource: REFERENCE_RESOURCES,
     props: list[str] | None = None,
@@ -567,7 +669,10 @@ async def idhall_list_reference_items(
             "page_size": max(1, min(page_size, 100)),
             "count": count,
         }
-    return await _get_client().request("GET", f"/api/v1/{resource}", query_params=query or None)
+    return cast(
+        dict[str, Any],
+        await _get_client().request("GET", f"/api/v1/{resource}", query_params=query or None),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +680,7 @@ async def idhall_list_reference_items(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_ANNOTATIONS)
 async def idhall_api_request(
     method: Literal["GET", "POST", "PUT", "PATCH", "DELETE"],
     path: str,
@@ -587,12 +692,6 @@ async def idhall_api_request(
     Avant d'utiliser cet outil sur un endpoint spécialisé (ex: audits, parties prenantes/contacts,
     ressources/pièces jointes, critères d'opportunité, lots de plan d'action), consultez son schéma
     avec `idhall_search_endpoints` et `idhall_get_endpoint_spec`.
-
-    Args:
-        method: Méthode HTTP (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`).
-        path: Chemin relatif, ex: `/api/v1/stakeholders/12/contacts` ou `risks/1`.
-        query_params: Paramètres de requête (ex: `{"props": ["title", "description"], "page_size": 10}`).
-        json_body: Corps JSON pour `POST`/`PUT`/`PATCH` (ou filtres complexes).
     """
     return await _get_client().request(
         method, path, query_params=query_params, json_body=json_body
@@ -641,8 +740,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # En mode stdio, on charge .env automatiquement s'il existe ; en mode HTTP multi-utilisateurs,
-    # on ne le charge que si --load-dotenv est explicitement demandé pour éviter tout partage involontaire de jeton.
+    set_active_transport(args.transport)
+
     if args.transport == "stdio" or args.load_dotenv:
         load_dotenv()
 

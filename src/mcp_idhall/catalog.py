@@ -6,7 +6,7 @@ import json
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 DEFAULT_REF_PATH = Path(__file__).resolve().parent.parent.parent / "docs" / "idhall_api_reference.json"
 
@@ -16,7 +16,7 @@ def _load_reference() -> dict[str, Any]:
     ref_path = Path(os.environ.get("IDHALL_REFERENCE_JSON", str(DEFAULT_REF_PATH)))
     if not ref_path.exists():
         return {"endpoints_index": [], "endpoint_details": {}}
-    return json.loads(ref_path.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(ref_path.read_text(encoding="utf-8")))
 
 
 def search_endpoints(
@@ -57,12 +57,12 @@ def search_endpoints(
 def get_endpoint_spec(endpoint_id: str) -> dict[str, Any] | None:
     """Retourne le schéma complet d'un endpoint depuis le référentiel local."""
     data = _load_reference()
-    details = data.get("endpoint_details", {})
-    if endpoint_id in details:
-        return details[endpoint_id]
+    details: dict[str, Any] = data.get("endpoint_details", {})
+    if endpoint_id in details and isinstance(details[endpoint_id], dict):
+        return cast(dict[str, Any], details[endpoint_id])
     # Tolère une recherche insensible à la casse
     target = endpoint_id.strip().lower()
     for k, v in details.items():
-        if k.lower() == target:
-            return v
+        if k.lower() == target and isinstance(v, dict):
+            return cast(dict[str, Any], v)
     return None

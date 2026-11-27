@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-idhall"
-version = "0.1.0"
+version = "0.2.0"
 description = "Serveur MCP (FastMCP) lecture/écriture pour l'API REST IDhall (Humanperf Software) avec authentification JWT par utilisateur."
 readme = "README.md"
 license = "Apache-2.0"
@@ -22,9 +22,12 @@ Issues = "https://github.com/smilebob/MCPIdhall/issues"
 
 [project.optional-dependencies]
 dev = [
+    "mypy>=1.13.0",
+    "pip-audit>=2.7.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "respx>=0.21.0",
+    "ruff>=0.8.0",
 ]
 
 [project.scripts]
@@ -35,4 +38,24 @@ packages = ["src/mcp_idhall"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 110
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
