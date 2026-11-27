@@ -32,8 +32,15 @@ LABEL org.opencontainers.image.title="MCPIdhall" \
       org.opencontainers.image.source="https://github.com/smilebob/MCPIdhall" \
       org.opencontainers.image.licenses="Apache-2.0"
 
-# Utilisateur non-root dédié
-RUN groupadd --system --gid 10001 mcpuser \
+# Utilisateur non-root dédié + patchs sécurité OS + suppression pip/setuptools inutilisés au runtime
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/python3.13/site-packages/pip* \
+              /usr/local/lib/python3.13/site-packages/setuptools* \
+              /usr/local/lib/python3.13/site-packages/wheel* \
+              /usr/local/bin/pip* \
+    && groupadd --system --gid 10001 mcpuser \
     && useradd --system --uid 10001 --gid mcpuser --home-dir /app --shell /usr/sbin/nologin mcpuser
 
 WORKDIR /app
