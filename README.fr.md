@@ -102,8 +102,16 @@ Chaque client MCP distant se connecte en HTTPS avec son propre jeton :
 | **Présentation du projet** | [`README.fr.md`](README.fr.md) | [`README.md`](README.md) |
 | **Guide utilisateur (Débutant à Pro)** | [`docs/GUIDE_UTILISATEUR.md`](docs/GUIDE_UTILISATEUR.md) | [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) |
 | **Guide Docker, Portainer & NPM** | [`docs/GUIDE_DOCKER_PORTAINER.md`](docs/GUIDE_DOCKER_PORTAINER.md) | [`docs/DOCKER_PORTAINER_GUIDE.md`](docs/DOCKER_PORTAINER_GUIDE.md) |
+| **Skill Agent (Antigravity)** | [`skills/idhall/SKILL.md`](skills/idhall/SKILL.md) | [`skills/idhall/SKILL.md`](skills/idhall/SKILL.md) |
 | **Spécification OpenAPI 3.1.0** | [`docs/openapi.json`](docs/openapi.json) | [`docs/openapi.json`](docs/openapi.json) |
 | **Synthèse API (208 endpoints)** | [`docs/IDHALL_API_SYNTHESE.md`](docs/IDHALL_API_SYNTHESE.md) | [`docs/IDHALL_API_SYNTHESE.md`](docs/IDHALL_API_SYNTHESE.md) |
+
+### Installer la Skill Agent (Antigravity)
+
+```bash
+mkdir -p ~/.gemini/config/skills
+cp -r skills/idhall ~/.gemini/config/skills/
+```
 
 ## Tests
 
